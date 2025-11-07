@@ -26,7 +26,7 @@ class GeminiDialogueManager:
     def __init__(
         self,
         api_key: Optional[str] = None,
-        model_name: str = "gemini-1.5-flash",  # Fastest for real-time
+        model_name: str = "gemini-pro",  # Stable model name
         temperature: float = 0.7,
         max_tokens: int = 150,
         system_prompt: Optional[str] = None,
@@ -37,9 +37,9 @@ class GeminiDialogueManager:
         Args:
             api_key: Google AI API key (or set GOOGLE_API_KEY env var)
             model_name: Gemini model to use
-                - gemini-1.5-flash: Fastest, best for real-time conversation
-                - gemini-1.5-pro: More capable, slightly slower
-                - gemini-2.0-flash-exp: Latest experimental, very fast
+                - gemini-pro: Stable, fast for conversation (default)
+                - gemini-1.5-pro-latest: Latest Pro model
+                - models/gemini-1.5-flash-latest: Latest Flash (if available)
             temperature: Response creativity (0.0-1.0)
             max_tokens: Maximum response length
             system_prompt: Custom personality/instructions
