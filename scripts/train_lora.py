@@ -30,44 +30,38 @@ logger = logging.getLogger(__name__)
 
 def load_csm_model(model_name: str = "sesame/csm-1b", device: str = "cuda"):
     """
-    Load CSM-1B base model.
+    Load CSM-1B base model for fine-tuning.
     
-    TODO: This is a placeholder. Actual implementation should:
-    1. Load CSM-1B from HuggingFace or local checkpoint
-    2. Prepare model for fine-tuning
-    3. Enable gradient checkpointing if needed
+    This loads the real CSM-1B model from downloaded weights.
     """
-    logger.info(f"Loading CSM model: {model_name}")
+    logger.info(f"Loading CSM model for training: {model_name}")
     
     try:
-        # Import CSM model loading utilities
-        from fern.tts.csm import models
+        # Load real CSM-1B model
+        from fern.tts.csm.load_real import load_csm_1b_real
         
-        # Load model
-        # For now, use stub for testing
-        from fern.tts.csm.load_stub import load_csm_1b_stub
+        generator, mimi = load_csm_1b_real(device=device)
         
-        model = load_csm_1b_stub(device=device)
-        logger.info("CSM model loaded (using stub)")
+        # The generator contains the model we want to fine-tune
+        model = generator.model
+        model.train()  # Set to training mode
+        
+        logger.info("✓ Real CSM model loaded for training")
+        
+        # Enable gradient checkpointing for memory efficiency
+        if hasattr(model, 'gradient_checkpointing_enable'):
+            model.gradient_checkpointing_enable()
+            logger.info("✓ Gradient checkpointing enabled")
         
         return model
         
     except Exception as e:
-        logger.error(f"Failed to load CSM model: {e}")
-        logger.info("Using dummy model for testing")
+        logger.error(f"Failed to load real CSM model: {e}")
+        logger.warning("Falling back to stub for testing only")
         
-        # Create dummy model for testing
-        import torch.nn as nn
-        
-        class DummyCSM(nn.Module):
-            def __init__(self):
-                super().__init__()
-                self.linear = nn.Linear(128, 128)
-            
-            def forward(self, x):
-                return self.linear(x)
-        
-        return DummyCSM()
+        from fern.tts.csm.load_stub import load_csm_1b_stub
+        generator = load_csm_1b_stub(device=device)
+        return generator.model
 
 
 def main():

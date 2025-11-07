@@ -32,6 +32,7 @@ import numpy as np
 from fern.llm.gemini_manager import GeminiDialogueManager
 from fern.tts.csm_real import RealCSMTTS
 from fern.tts.csm_streaming import StreamingTTS
+from fern.asr.whisper_asr import WhisperASR
 
 
 # Initialize FastAPI
@@ -41,10 +42,13 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS for web client
+# CORS configuration
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*").split(",")
+CORS_ORIGINS = [origin.strip() for origin in CORS_ORIGINS]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, restrict this
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -54,6 +58,19 @@ app.add_middleware(
 llm: Optional[GeminiDialogueManager] = None
 tts: Optional[RealCSMTTS] = None
 streaming_tts: Optional[StreamingTTS] = None
+asr: Optional[WhisperASR] = None
+
+
+def detect_device() -> str:
+    """Detect best available compute device."""
+    import torch
+    
+    if torch.cuda.is_available():
+        return "cuda"
+    elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+        return "mps"
+    else:
+        return "cpu"
 
 
 def get_llm():
@@ -71,10 +88,24 @@ def get_tts():
     """Get or initialize TTS."""
     global tts, streaming_tts
     if tts is None:
-        device = "cuda" if os.path.exists("/proc/driver/nvidia/version") else "cpu"
+        device = detect_device()
         tts = RealCSMTTS(device=device)
         streaming_tts = StreamingTTS(tts, chunk_duration_ms=200)
     return tts, streaming_tts
+
+
+def get_asr():
+    """Get or initialize ASR."""
+    global asr
+    if asr is None:
+        device = detect_device()
+        compute_type = "float16" if device == "cuda" else "int8"
+        asr = WhisperASR(
+            model_size="large-v3",
+            device=device,
+            compute_type=compute_type
+        )
+    return asr
 
 
 # Request/Response models
@@ -107,6 +138,7 @@ async def health():
         "status": "healthy",
         "llm_loaded": llm is not None,
         "tts_loaded": tts is not None,
+        "asr_loaded": asr is not None,
     }
 
 
@@ -131,6 +163,47 @@ async def chat(request: ChatRequest):
             response=response_text,
             audio_base64=None
         )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/transcribe")
+async def transcribe(audio: UploadFile = File(...)):
+    """
+    Transcribe audio to text.
+    
+    Accepts audio file upload and returns transcribed text.
+    
+    Example:
+        curl -X POST http://localhost:8000/api/transcribe \\
+            -F "audio=@recording.wav"
+    """
+    try:
+        asr_instance = get_asr()
+        
+        # Read audio file
+        audio_bytes = await audio.read()
+        
+        # Convert to numpy array
+        audio_data, sample_rate = sf.read(io.BytesIO(audio_bytes))
+        
+        # Convert to float32 if needed
+        if audio_data.dtype != np.float32:
+            audio_data = audio_data.astype(np.float32)
+        
+        # Flatten if stereo
+        if len(audio_data.shape) > 1:
+            audio_data = audio_data.mean(axis=1)
+        
+        # Transcribe
+        result = asr_instance.transcribe(audio_data, sample_rate=sample_rate)
+        
+        return {
+            "text": result["text"],
+            "language": result.get("language", "en"),
+            "segments": result.get("segments", [])
+        }
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -232,11 +305,16 @@ async def stream_audio(text: str):
         
         def generate_chunks():
             """Generator for audio chunks."""
-            for chunk in streaming_tts_instance.synthesize_stream(text):
-                # Convert chunk to WAV bytes
-                buffer = io.BytesIO()
-                sf.write(buffer, chunk, 24000, format='WAV')
-                yield buffer.getvalue()
+            try:
+                for chunk in streaming_tts_instance.synthesize_stream(text):
+                    # Convert chunk to WAV bytes
+                    buffer = io.BytesIO()
+                    sf.write(buffer, chunk, 24000, format='WAV')
+                    yield buffer.getvalue()
+            except Exception as e:
+                # Log error but can't raise in generator
+                print(f"Streaming error: {e}")
+                raise
         
         return StreamingResponse(
             generate_chunks(),

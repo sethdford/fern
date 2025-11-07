@@ -226,6 +226,8 @@
     <script>
         let isRecording = false;
         let isSpeaking = false;
+        let mediaRecorder = null;
+        let audioChunks = [];
         
         function handleKeyPress(event) {
             if (event.key === 'Enter') {
@@ -331,9 +333,116 @@
             });
         }
         
-        function startRecording() {
-            alert('Voice recording coming soon! For now, please type your message.');
-            // TODO: Implement WebRTC audio recording
+        async function startRecording() {
+            const recordBtn = document.getElementById('recordBtn');
+            
+            if (!isRecording) {
+                // Start recording
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+                    
+                    mediaRecorder.ondataavailable = (event) => {
+                        if (event.data.size > 0) {
+                            audioChunks.push(event.data);
+                        }
+                    };
+                    
+                    mediaRecorder.onstop = async () => {
+                        // Create audio blob
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                        
+                        // Stop all tracks
+                        stream.getTracks().forEach(track => track.stop());
+                        
+                        // Transcribe audio
+                        await transcribeAndChat(audioBlob);
+                    };
+                    
+                    mediaRecorder.start();
+                    isRecording = true;
+                    recordBtn.textContent = '⏹️ Stop Recording';
+                    recordBtn.style.background = '#dc3545';
+                    updateStatus('recording', '🔴 Recording... Click to stop');
+                    
+                } catch (error) {
+                    console.error('Microphone error:', error);
+                    updateStatus('error', '❌ Microphone access denied');
+                    alert('Please allow microphone access to use voice input.');
+                }
+            } else {
+                // Stop recording
+                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                    mediaRecorder.stop();
+                    isRecording = false;
+                    recordBtn.textContent = '🎤 Start Recording';
+                    recordBtn.style.background = '#667eea';
+                    updateStatus('thinking', '🤔 Processing...');
+                }
+            }
+        }
+        
+        async function transcribeAndChat(audioBlob) {
+            try {
+                // Create form data
+                const formData = new FormData();
+                formData.append('audio', audioBlob, 'recording.wav');
+                
+                // Transcribe
+                updateStatus('thinking', '🤔 Transcribing...');
+                const transcribeResponse = await fetch('/api/transcribe', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!transcribeResponse.ok) {
+                    throw new Error('Transcription failed');
+                }
+                
+                const transcribeData = await transcribeResponse.json();
+                const userText = transcribeData.text;
+                
+                if (!userText.trim()) {
+                    updateStatus('error', '❌ No speech detected');
+                    return;
+                }
+                
+                // Add user message to chat
+                addMessage(userText, 'user');
+                
+                // Get response
+                updateStatus('thinking', '🤔 Thinking...');
+                const chatResponse = await fetch('/api/chat-with-voice', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ message: userText })
+                });
+                
+                if (!chatResponse.ok) {
+                    throw new Error('Chat failed');
+                }
+                
+                const chatData = await chatResponse.json();
+                
+                // Add assistant response
+                addMessage(chatData.response, 'assistant');
+                
+                // Play audio if available
+                if (chatData.audio_base64) {
+                    updateStatus('speaking', '🔊 Speaking...');
+                    await playAudioBase64(chatData.audio_base64);
+                }
+                
+                updateStatus('ready', 'Ready to chat!');
+                
+            } catch (error) {
+                console.error('Error:', error);
+                updateStatus('error', '❌ Error: ' + error.message);
+                addMessage('Sorry, I encountered an error. Please try again.', 'assistant');
+            }
         }
         
         function clearChat() {

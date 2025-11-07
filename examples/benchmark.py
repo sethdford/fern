@@ -1,4 +1,4 @@
-"""Benchmark script to evaluate i-LAVA performance across RVQ configurations."""
+"""Benchmark script to evaluate fern performance across RVQ configurations."""
 
 import os
 import sys

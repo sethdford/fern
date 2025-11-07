@@ -53,46 +53,58 @@ class StreamingTTS:
         Yields:
             Audio chunks as numpy arrays
         """
-        # Generate full audio (TODO: make this truly streaming at model level)
-        full_audio = self.tts.synthesize(text)
-        
-        # Convert to numpy if needed
-        if hasattr(full_audio, 'cpu'):
-            full_audio = full_audio.cpu().numpy()
-        
-        # Yield in chunks
-        total_samples = len(full_audio)
-        pos = 0
-        
-        while pos < total_samples:
-            # Calculate chunk end
-            chunk_end = min(pos + self.chunk_size, total_samples)
+        full_audio = None
+        try:
+            # Generate full audio (TODO: make this truly streaming at model level)
+            full_audio = self.tts.synthesize(text)
             
-            # Extract chunk
-            chunk = full_audio[pos:chunk_end]
+            # Convert to numpy if needed
+            if hasattr(full_audio, 'cpu'):
+                full_audio = full_audio.cpu().numpy()
             
-            # Add overlap from previous chunk for smoothing
-            if pos > 0 and overlap_samples > 0:
-                overlap_start = max(0, pos - overlap_samples)
-                overlap = full_audio[overlap_start:pos]
+            # Yield in chunks
+            total_samples = len(full_audio)
+            pos = 0
+            
+            while pos < total_samples:
+                # Calculate chunk end
+                chunk_end = min(pos + self.chunk_size, total_samples)
                 
-                # Simple crossfade
-                fade_out = np.linspace(1.0, 0.0, len(overlap))
-                fade_in = np.linspace(0.0, 1.0, len(overlap))
+                # Extract chunk
+                chunk = full_audio[pos:chunk_end]
                 
-                # Mix overlapping region
-                if len(overlap) > 0:
-                    chunk[:len(overlap)] = (
-                        chunk[:len(overlap)] * fade_in +
-                        overlap * fade_out
-                    )
-            
-            yield chunk
-            
-            # Move to next chunk
-            pos = chunk_end
-            
-            logger.debug(f"Streamed chunk: {len(chunk)} samples ({pos}/{total_samples})")
+                # Add overlap from previous chunk for smoothing
+                if pos > 0 and overlap_samples > 0:
+                    overlap_start = max(0, pos - overlap_samples)
+                    overlap = full_audio[overlap_start:pos]
+                    
+                    # Simple crossfade
+                    fade_out = np.linspace(1.0, 0.0, len(overlap))
+                    fade_in = np.linspace(0.0, 1.0, len(overlap))
+                    
+                    # Mix overlapping region
+                    if len(overlap) > 0:
+                        chunk[:len(overlap)] = (
+                            chunk[:len(overlap)] * fade_in +
+                            overlap * fade_out
+                        )
+                
+                yield chunk
+                
+                # Move to next chunk
+                pos = chunk_end
+                
+                logger.debug(f"Streamed chunk: {len(chunk)} samples ({pos}/{total_samples})")
+        
+        except Exception as e:
+            logger.error(f"Error in synthesize_stream: {e}")
+            raise
+        finally:
+            # Cleanup: ensure GPU memory is released
+            if full_audio is not None and hasattr(full_audio, 'cpu'):
+                del full_audio
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
     
     def synthesize_stream_sentences(self, text: str) -> Iterator[np.ndarray]:
         """
@@ -107,24 +119,42 @@ class StreamingTTS:
         Yields:
             Audio for each sentence
         """
-        # Simple sentence splitting
-        import re
-        sentences = re.split(r'([.!?]+\s+)', text)
-        sentences = [''.join(sentences[i:i+2]) for i in range(0, len(sentences), 2)]
-        sentences = [s.strip() for s in sentences if s.strip()]
+        audio = None
+        try:
+            # Simple sentence splitting
+            import re
+            sentences = re.split(r'([.!?]+\s+)', text)
+            sentences = [''.join(sentences[i:i+2]) for i in range(0, len(sentences), 2)]
+            sentences = [s.strip() for s in sentences if s.strip()]
+            
+            for i, sentence in enumerate(sentences):
+                logger.debug(f"Generating sentence {i+1}/{len(sentences)}: {sentence[:50]}...")
+                
+                try:
+                    # Generate audio for this sentence
+                    audio = self.tts.synthesize(sentence)
+                    
+                    if hasattr(audio, 'cpu'):
+                        audio = audio.cpu().numpy()
+                    
+                    yield audio
+                    
+                    logger.info(f"Streamed sentence {i+1}/{len(sentences)}")
+                
+                finally:
+                    # Cleanup after each sentence
+                    if audio is not None and hasattr(audio, 'cpu'):
+                        del audio
+                        audio = None
         
-        for i, sentence in enumerate(sentences):
-            logger.debug(f"Generating sentence {i+1}/{len(sentences)}: {sentence[:50]}...")
-            
-            # Generate audio for this sentence
-            audio = self.tts.synthesize(sentence)
-            
-            if hasattr(audio, 'cpu'):
-                audio = audio.cpu().numpy()
-            
-            yield audio
-            
-            logger.info(f"Streamed sentence {i+1}/{len(sentences)}")
+        except Exception as e:
+            logger.error(f"Error in synthesize_stream_sentences: {e}")
+            raise
+        
+        finally:
+            # Final cleanup
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
 
 def apply_streaming_to_tts(tts_model, chunk_duration_ms: int = 200):

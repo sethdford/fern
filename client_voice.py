@@ -33,13 +33,10 @@ from pynput import keyboard
 from fern.llm.gemini_manager import GeminiDialogueManager
 from fern.tts.csm_real import RealCSMTTS
 from fern.tts.csm_streaming import StreamingTTS
+from fern.asr.whisper_asr import WhisperASR
+from fern.asr.vad_detector import VADDetector, WEBRTC_AVAILABLE
 
-# For voice activity detection
-try:
-    import webrtcvad
-    WEBRTC_AVAILABLE = True
-except ImportError:
-    WEBRTC_AVAILABLE = False
+if not WEBRTC_AVAILABLE:
     print("⚠️  webrtcvad not installed - using simple silence detection")
     print("   Install with: pip install webrtcvad")
 
@@ -83,6 +80,20 @@ class VoiceClient:
         
         # Initialize AI components
         print("Loading models...")
+        
+        print("  → Whisper ASR...")
+        # Use turbo model for low latency
+        compute_type = "float16" if device == "cuda" else "int8"
+        self.asr = WhisperASR(
+            model_size="large-v3",
+            device=device,
+            compute_type=compute_type
+        )
+        print("    ✓ Ready")
+        
+        print("  → VAD...")
+        self.vad = VADDetector(sample_rate=sample_rate, aggressiveness=2)
+        print("    ✓ Ready")
         
         print("  → Gemini LLM...")
         self.llm = GeminiDialogueManager(api_key=google_api_key)
@@ -184,13 +195,27 @@ class VoiceClient:
             # Transcribe audio
             print(f"{Colors.BLUE}  → Transcribing...{Colors.END}")
             
-            # Simple placeholder - in production, use Whisper
-            # For now, use keyboard input as fallback
-            print(f"{Colors.YELLOW}  ⚠️  ASR not yet integrated - please type your message:{Colors.END}")
-            user_text = input(f"{Colors.GREEN}  You: {Colors.END}")
+            # Convert to float32 if needed
+            if audio_data.dtype != np.float32:
+                audio_data = audio_data.astype(np.float32)
+            
+            # Flatten if stereo
+            if len(audio_data.shape) > 1:
+                audio_data = audio_data.mean(axis=1)
+            
+            # Filter silence using VAD
+            filtered_audio = self.vad.filter_silence(audio_data, padding_ms=300)
+            
+            if len(filtered_audio) == 0:
+                print(f"{Colors.YELLOW}  ⚠️  No speech detected (VAD filtered all audio){Colors.END}\n")
+                return
+            
+            # Transcribe with Whisper
+            result = self.asr.transcribe(filtered_audio, sample_rate=self.sample_rate)
+            user_text = result["text"]
             
             if not user_text.strip():
-                print(f"{Colors.YELLOW}  ⚠️  Empty input{Colors.END}\n")
+                print(f"{Colors.YELLOW}  ⚠️  No speech detected{Colors.END}\n")
                 return
             
             print(f"{Colors.GREEN}  👤 You: {user_text}{Colors.END}")
@@ -260,6 +285,18 @@ class VoiceClient:
         print(f"{Colors.GREEN}👋 Goodbye!{Colors.END}")
 
 
+def detect_device() -> str:
+    """Detect best available compute device."""
+    import torch
+    
+    if torch.cuda.is_available():
+        return "cuda"
+    elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+        return "mps"
+    else:
+        return "cpu"
+
+
 def main():
     """Run the voice client."""
     # Get API key
@@ -271,7 +308,8 @@ def main():
         return 1
     
     # Check device
-    device = "cuda" if os.path.exists("/proc/driver/nvidia/version") else "cpu"
+    device = detect_device()
+    print(f"Using device: {device}")
     
     # Create and run client
     try:
