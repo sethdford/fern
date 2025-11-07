@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FERN Voice Assistant</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+        }
+        
+        .chat-container {
+            height: 400px;
+            overflow-y: auto;
+            border: 2px solid #f0f0f0;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            background: #fafafa;
+        }
+        
+        .message {
+            margin-bottom: 15px;
+            padding: 12px 16px;
+            border-radius: 18px;
+            max-width: 80%;
+            animation: slideIn 0.3s ease;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .user-message {
+            background: #667eea;
+            color: white;
+            margin-left: auto;
+            text-align: right;
+        }
+        
+        .assistant-message {
+            background: #e3f2fd;
+            color: #333;
+        }
+        
+        .input-container {
+            display: flex;
+            gap: 10px;
+        }
+        
+        #messageInput {
+            flex: 1;
+            padding: 15px;
+            border: 2px solid #f0f0f0;
+            border-radius: 25px;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+        
+        #messageInput:focus {
+            border-color: #667eea;
+        }
+        
+        button {
+            padding: 15px 30px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 600;
+        }
+        
+        button:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 15px;
+        }
+        
+        .controls button {
+            padding: 10px 20px;
+            font-size: 14px;
+        }
+        
+        .status {
+            text-align: center;
+            padding: 10px;
+            margin-top: 15px;
+            border-radius: 10px;
+            font-size: 14px;
+            min-height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .status.thinking {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .status.speaking {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        
+        .status.ready {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎙️ FERN</h1>
+        <p class="subtitle">AI Voice Assistant</p>
+        
+        <div class="chat-container" id="chatContainer">
+            <div class="message assistant-message">
+                👋 Hello! I'm FERN, your AI voice assistant. Type a message or click "Start Recording" to talk!
+            </div>
+        </div>
+        
+        <div class="input-container">
+            <input 
+                type="text" 
+                id="messageInput" 
+                placeholder="Type your message..."
+                onkeypress="handleKeyPress(event)"
+            >
+            <button onclick="sendMessage()" id="sendBtn">Send</button>
+        </div>
+        
+        <div class="controls">
+            <button onclick="startRecording()" id="recordBtn">🎤 Start Recording</button>
+            <button onclick="clearChat()">🗑️ Clear</button>
+        </div>
+        
+        <div class="status ready" id="status">
+            Ready to chat!
+        </div>
+    </div>
+
+    <script>
+        let isRecording = false;
+        let isSpeaking = false;
+        
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+        
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            
+            if (!message || isSpeaking) return;
+            
+            // Add user message to chat
+            addMessage(message, 'user');
+            input.value = '';
+            
+            // Show thinking status
+            updateStatus('thinking', '🤔 Thinking...');
+            
+            try {
+                // Send to API
+                const response = await fetch('/api/chat-with-voice', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ message })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('API request failed');
+                }
+                
+                const data = await response.json();
+                
+                // Add assistant response
+                addMessage(data.response, 'assistant');
+                
+                // Play audio if available
+                if (data.audio_base64) {
+                    updateStatus('speaking', '🔊 Speaking...');
+                    await playAudioBase64(data.audio_base64);
+                }
+                
+                updateStatus('ready', 'Ready to chat!');
+                
+            } catch (error) {
+                console.error('Error:', error);
+                updateStatus('error', '❌ Error: ' + error.message);
+                addMessage('Sorry, I encountered an error. Please try again.', 'assistant');
+            }
+        }
+        
+        function addMessage(text, type) {
+            const container = document.getElementById('chatContainer');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}-message`;
+            messageDiv.textContent = text;
+            container.appendChild(messageDiv);
+            container.scrollTop = container.scrollHeight;
+        }
+        
+        function updateStatus(type, message) {
+            const status = document.getElementById('status');
+            status.className = `status ${type}`;
+            
+            if (type === 'thinking' || type === 'speaking') {
+                status.innerHTML = `<div class="loader"></div>${message}`;
+            } else {
+                status.textContent = message;
+            }
+        }
+        
+        async function playAudioBase64(base64Audio) {
+            return new Promise((resolve, reject) => {
+                isSpeaking = true;
+                
+                // Convert base64 to blob
+                const audioData = atob(base64Audio);
+                const arrayBuffer = new ArrayBuffer(audioData.length);
+                const view = new Uint8Array(arrayBuffer);
+                for (let i = 0; i < audioData.length; i++) {
+                    view[i] = audioData.charCodeAt(i);
+                }
+                
+                const blob = new Blob([arrayBuffer], { type: 'audio/wav' });
+                const url = URL.createObjectURL(blob);
+                
+                const audio = new Audio(url);
+                audio.onended = () => {
+                    isSpeaking = false;
+                    URL.revokeObjectURL(url);
+                    resolve();
+                };
+                audio.onerror = (error) => {
+                    isSpeaking = false;
+                    URL.revokeObjectURL(url);
+                    reject(error);
+                };
+                
+                audio.play();
+            });
+        }
+        
+        function startRecording() {
+            alert('Voice recording coming soon! For now, please type your message.');
+            // TODO: Implement WebRTC audio recording
+        }
+        
+        function clearChat() {
+            const container = document.getElementById('chatContainer');
+            container.innerHTML = '<div class="message assistant-message">Chat cleared. How can I help you?</div>';
+            updateStatus('ready', 'Ready to chat!');
+        }
+        
+        // Check API health on load
+        fetch('/health')
+            .then(r => r.json())
+            .then(data => {
+                console.log('API Status:', data);
+                if (data.status === 'healthy') {
+                    updateStatus('ready', '✅ Ready to chat!');
+                }
+            })
+            .catch(err => {
+                console.error('Health check failed:', err);
+                updateStatus('error', '❌ API not available');
+            });
+    </script>
+</body>
+</html>
+
