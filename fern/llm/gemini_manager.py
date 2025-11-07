@@ -54,13 +54,38 @@ class GeminiDialogueManager:
         # Configure Gemini
         genai.configure(api_key=self.api_key)
         
-        # Map to correct model name (API compatibility)
-        model_mapping = {
-            "gemini-pro": "gemini-1.5-flash-latest",  # Use latest flash
-            "gemini-1.5-pro-latest": "gemini-1.5-pro-latest",
-            "gemini-1.5-flash": "gemini-1.5-flash-latest",
-        }
-        self.model_name = model_mapping.get(model_name, model_name)
+        # Try to find an available model
+        # The API keeps changing model names, so we try multiple options
+        available_models = self._get_available_models()
+        
+        # Preference order for conversational AI
+        model_preferences = [
+            "gemini-1.5-flash",
+            "gemini-1.5-flash-latest",
+            "gemini-1.5-pro",
+            "gemini-1.5-pro-latest",
+            "gemini-pro",
+            model_name,  # Try user's requested model
+        ]
+        
+        # Find first available model
+        self.model_name = None
+        for candidate in model_preferences:
+            if candidate in available_models:
+                self.model_name = candidate
+                logger.info(f"Using Gemini model: {self.model_name}")
+                break
+        
+        # Fallback to first available if none match
+        if not self.model_name and available_models:
+            self.model_name = available_models[0]
+            logger.warning(f"Using fallback model: {self.model_name}")
+        
+        if not self.model_name:
+            raise ValueError(
+                "No compatible Gemini models found. Check your API key and quota."
+            )
+        
         self.temperature = temperature
         self.max_tokens = max_tokens
         
@@ -89,7 +114,22 @@ Remember: Your responses will be spoken aloud, so keep them natural and conversa
         self.conversation_history: List[Dict[str, str]] = []
         self.max_history = 10  # Keep last 10 exchanges
         
-        logger.info(f"Initialized Gemini dialogue manager with {model_name}")
+        logger.info(f"Initialized Gemini dialogue manager with {self.model_name}")
+    
+    def _get_available_models(self) -> list[str]:
+        """Get list of available Gemini models that support generateContent."""
+        try:
+            models = []
+            for model in genai.list_models():
+                if 'generateContent' in model.supported_generation_methods:
+                    # Extract model name (e.g., "models/gemini-pro" -> "gemini-pro")
+                    name = model.name.split('/')[-1] if '/' in model.name else model.name
+                    models.append(name)
+            return models
+        except Exception as e:
+            logger.warning(f"Could not list models: {e}")
+            # Return common fallbacks
+            return ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"]
     
     def generate_response(
         self,
