@@ -151,11 +151,17 @@ print_success "PyTorch installed"
 # Verify CUDA in PyTorch
 python3 -c "import torch; assert torch.cuda.is_available(), 'CUDA not available in PyTorch'; print(f'✓ PyTorch CUDA: {torch.cuda.get_device_name(0)}')"
 
-# Install FERN dependencies
+# Install FERN dependencies (in correct order)
 print_info "Installing FERN dependencies..."
 if [ -f "requirements.txt" ]; then
+    # Install all requirements (csm-streaming is commented out in the file)
     pip install -r requirements.txt -q
-    print_success "Dependencies installed"
+    print_success "Core dependencies installed"
+    
+    # Now install csm-streaming separately (PyTorch is available now)
+    print_info "Installing CSM-streaming (requires PyTorch to build)..."
+    pip install git+https://github.com/davidbrowne17/csm-streaming.git -q
+    print_success "CSM-streaming installed"
 else
     print_error "requirements.txt not found"
     exit 1

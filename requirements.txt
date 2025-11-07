@@ -1,67 +1,122 @@
-# Core Dependencies
-torch>=2.0.0,<=2.8.0
-torchaudio>=2.0.0
+# =============================================================================
+# FERN Requirements - Install in order!
+# =============================================================================
+# 
+# IMPORTANT: This file is designed to be installed in sections to handle
+# build dependencies properly. The setup script handles this automatically.
+#
+# Manual installation order:
+#   1. pip install torch torchvision torchaudio --index-url https://...
+#   2. pip install -r requirements.txt
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Section 1: Core Dependencies (Must be installed FIRST)
+# -----------------------------------------------------------------------------
+# Note: PyTorch should be installed separately with the correct CUDA version
+# For RTX 5090: torch==2.8.0 with CUDA 12.6
+# For RTX 4090: torch with CUDA 12.1
+# The setup script handles this automatically.
+
 numpy>=1.24.0
 scipy>=1.10.0
 
-# ASR - Whisper
-openai-whisper>=20231117
-faster-whisper>=0.10.0
-
-# VAD - Voice Activity Detection
-silero-vad>=4.0.0
-
-# LLM - OpenAI Integration
-openai>=1.0.0
-tiktoken>=0.5.0
-
-# TTS - CSM-1B and Audio Processing
+# -----------------------------------------------------------------------------
+# Section 2: ML Frameworks (Requires PyTorch)
+# -----------------------------------------------------------------------------
 transformers>=4.35.0
 accelerate>=0.25.0
+peft>=0.10.0  # LoRA for fine-tuning
+datasets>=2.18.0  # HuggingFace datasets
+
+# -----------------------------------------------------------------------------
+# Section 3: Audio Processing
+# -----------------------------------------------------------------------------
 soundfile>=0.12.0
 librosa>=0.10.0
 audioread>=3.0.0
+sounddevice>=0.4.6  # Real-time audio playback
+torchaudio>=2.0.0  # Installed with PyTorch usually
 
-# Performance Optimization
-# torch-compile-utils>=0.1.0  # Not available as standalone package
-# triton>=2.1.0  # Included with torch
+# -----------------------------------------------------------------------------
+# Section 4: ASR - Automatic Speech Recognition
+# -----------------------------------------------------------------------------
+openai-whisper>=20231117
+faster-whisper>=0.10.0
 
-# Utilities
+# -----------------------------------------------------------------------------
+# Section 5: VAD - Voice Activity Detection
+# -----------------------------------------------------------------------------
+silero-vad>=4.0.0
+
+# -----------------------------------------------------------------------------
+# Section 6: LLM - Language Model Integration
+# -----------------------------------------------------------------------------
+openai>=1.0.0
+tiktoken>=0.5.0
+
+# -----------------------------------------------------------------------------
+# Section 7: TTS - Text-to-Speech (CSM-1B)
+# -----------------------------------------------------------------------------
+einops>=0.7.0
+
+# CSM-Streaming: Install LAST (requires PyTorch to build)
+# Uncomment after PyTorch is installed, or use setup script
+# git+https://github.com/davidbrowne17/csm-streaming.git
+
+# -----------------------------------------------------------------------------
+# Section 8: Utilities
+# -----------------------------------------------------------------------------
 pydantic>=2.0.0
 python-dotenv>=1.0.0
 tqdm>=4.65.0
 pyyaml>=6.0
 
-# Metrics and Monitoring
+# -----------------------------------------------------------------------------
+# Section 9: Training & Optimization
+# -----------------------------------------------------------------------------
 tensorboard>=2.15.0
 wandb>=0.16.0
+optuna>=3.5.0  # Hyperparameter optimization
 
-# Audio Quality Metrics
+# -----------------------------------------------------------------------------
+# Section 10: Audio Quality Metrics
+# -----------------------------------------------------------------------------
 pesq>=0.0.4
 pystoi>=0.3.3
 
-# Testing
+# -----------------------------------------------------------------------------
+# Section 11: Testing
+# -----------------------------------------------------------------------------
 pytest>=7.4.0
 pytest-asyncio>=0.21.0
 pytest-cov>=4.1.0
 pytest-mock>=3.12.0
 
-# Development
+# -----------------------------------------------------------------------------
+# Section 12: Development Tools
+# -----------------------------------------------------------------------------
 black>=23.0.0
 isort>=5.12.0
 flake8>=6.0.0
 mypy>=1.7.0
 pre-commit>=3.5.0
 
-# CSM-1B Real Implementation
-einops>=0.7.0
-sounddevice>=0.4.6  # For real-time audio playback
-git+https://github.com/davidbrowne17/csm-streaming.git
-
-# Fine-Tuning (Phase 2.1.8)
-peft>=0.10.0  # LoRA implementation
-datasets>=2.18.0  # HuggingFace datasets for Elise
-optuna>=3.5.0  # Hyperparameter optimization
-
-# Semantic Turn Detection (Phase 2.2.3)
-# SmolLM2-360M-Instruct - downloads automatically via transformers
+# =============================================================================
+# Installation Notes:
+# =============================================================================
+# 
+# The csm-streaming package is commented out because it requires PyTorch
+# to be installed first (it has native extensions that compile against torch).
+#
+# Our setup script (scripts/runpod_setup.sh) handles the correct order:
+#   1. Install PyTorch with correct CUDA version (2.8.0 for RTX 5090)
+#   2. Install requirements.txt (all deps above)
+#   3. Install csm-streaming separately: 
+#      pip install git+https://github.com/davidbrowne17/csm-streaming.git
+#
+# For manual installation:
+#   pip install torch==2.8.0 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126  # RTX 5090
+#   pip install -r requirements.txt
+#   pip install git+https://github.com/davidbrowne17/csm-streaming.git
+# =============================================================================
