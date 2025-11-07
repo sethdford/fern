@@ -36,13 +36,21 @@ Three complete real-time voice agents, each with increasing sophistication:
 ### Quick Start
 
 ```bash
-# Set API key
+# 1. Install system audio dependencies (RunPod/Linux)
+bash scripts/fix_audio_deps.sh
+
+# 2. Set API key
 export GOOGLE_API_KEY="your-key"
 
-# Run the agent
+# 3. Run the agent
 python realtime_agent.py
 
 # Just start talking naturally!
+```
+
+**First time?** If you get `ModuleNotFoundError: No module named 'sounddevice'`, run:
+```bash
+bash scripts/fix_audio_deps.sh
 ```
 
 ### How It Works

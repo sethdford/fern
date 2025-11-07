@@ -59,6 +59,12 @@ apt-get update -y
 apt-get install -y git wget curl vim htop tmux build-essential
 print_success "System updated"
 
+# Install audio system dependencies
+print_header "Installing Audio System Dependencies"
+print_info "Installing PortAudio for voice clients..."
+apt-get install -y portaudio19-dev libportaudio2 libsndfile1
+print_success "Audio system dependencies installed"
+
 # Set up workspace
 print_header "Setting Up Workspace"
 cd /workspace
