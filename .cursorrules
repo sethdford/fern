@@ -1,0 +1,533 @@
+# Cursor AI Rules for i-LAVA Project
+
+## Core Development Principles
+
+### 1. Critical Analysis First (ALWAYS)
+Before ANY code changes:
+- [ ] Analyze the problem thoroughly
+- [ ] Identify all edge cases
+- [ ] Consider impact on existing code
+- [ ] Review related tests
+- [ ] Check for similar patterns in codebase
+- [ ] Validate assumptions with code search
+
+### 2. Test-Driven Development (TDD) - MANDATORY
+**RED-GREEN-REFACTOR cycle for ALL code:**
+
+#### Phase 1: RED (Write Failing Test)
+```python
+# ALWAYS start with a test that fails
+def test_new_feature():
+    """Test description explaining WHAT and WHY."""
+    # Arrange: Set up test data
+    config = create_test_config()
+    
+    # Act: Execute the behavior
+    result = feature_under_test(config)
+    
+    # Assert: Verify expected outcome
+    assert result == expected_value
+    assert isinstance(result, ExpectedType)
+```
+
+#### Phase 2: GREEN (Minimal Implementation)
+- Write simplest code to pass the test
+- No premature optimization
+- Focus on correctness first
+
+#### Phase 3: REFACTOR (Improve Design)
+- Clean up code
+- Remove duplication
+- Improve naming
+- Extract methods if needed
+- **Tests must still pass**
+
+### 3. Test Structure Standards
+
+#### Test File Organization
+```
+tests/
+├── unit/           # Fast, isolated tests
+├── integration/    # Component interaction tests
+├── e2e/           # End-to-end tests
+└── conftest.py    # Shared fixtures
+```
+
+#### Test Naming Convention
+```python
+def test_<component>_<scenario>_<expected_behavior>():
+    """
+    Given: Initial state/conditions
+    When: Action/trigger
+    Then: Expected outcome
+    """
+```
+
+#### Test Coverage Requirements
+- **Minimum**: 80% line coverage
+- **Required**: All public APIs tested
+- **Required**: All edge cases covered
+- **Required**: Error paths tested
+
+### 4. Clean Architecture Principles
+
+#### Layer Separation (Onion Architecture)
+```
+┌─────────────────────────────────────┐
+│     Presentation Layer (CLI/API)    │  ← Depends on Application
+├─────────────────────────────────────┤
+│     Application Layer (Use Cases)   │  ← Depends on Domain
+├─────────────────────────────────────┤
+│     Domain Layer (Business Logic)   │  ← No external dependencies
+├─────────────────────────────────────┤
+│  Infrastructure (DB, APIs, Models)  │  ← Implements interfaces
+└─────────────────────────────────────┘
+```
+
+#### Dependency Rules
+1. **Inner layers NEVER depend on outer layers**
+2. **Outer layers depend on inner abstractions (interfaces)**
+3. **Domain layer has NO external dependencies**
+4. **Use dependency injection for flexibility**
+
+#### Project Structure (Clean Architecture)
+```
+ilava/
+├── domain/              # Business logic (no dependencies)
+│   ├── entities/        # Domain objects
+│   ├── value_objects/   # Immutable values
+│   └── interfaces/      # Abstract interfaces
+├── application/         # Use cases (depends on domain)
+│   ├── use_cases/       # Business workflows
+│   └── dto/            # Data transfer objects
+├── infrastructure/      # External concerns (implements interfaces)
+│   ├── asr/            # Whisper implementation
+│   ├── llm/            # OpenAI implementation
+│   ├── tts/            # CSM implementation
+│   └── vad/            # Silero implementation
+└── presentation/        # User interfaces
+    ├── cli/            # Command-line
+    └── api/            # REST API (if needed)
+```
+
+### 5. Code Quality Standards
+
+#### Function Design
+```python
+def function_name(
+    required_param: Type,
+    optional_param: Optional[Type] = None,
+) -> ReturnType:
+    """
+    One-line summary of function purpose.
+    
+    Detailed description if needed.
+    
+    Args:
+        required_param: Description
+        optional_param: Description. Defaults to None.
+    
+    Returns:
+        Description of return value
+    
+    Raises:
+        SpecificError: When and why
+    
+    Examples:
+        >>> function_name("test")
+        expected_output
+    """
+    # Single Responsibility Principle
+    # Max 20 lines per function
+    # Max 4 parameters
+```
+
+#### Class Design (SOLID Principles)
+```python
+from abc import ABC, abstractmethod
+from typing import Protocol
+
+# S: Single Responsibility
+class UserService:
+    """Handles user-related operations ONLY."""
+    
+    def __init__(self, repository: 'UserRepository'):
+        self._repository = repository
+    
+    def create_user(self, data: dict) -> User:
+        """Single, well-defined purpose."""
+        pass
+
+# O: Open/Closed (Open for extension, closed for modification)
+class AudioProcessor(ABC):
+    """Abstract base - extend, don't modify."""
+    
+    @abstractmethod
+    def process(self, audio: np.ndarray) -> np.ndarray:
+        pass
+
+# L: Liskov Substitution (Subtypes must be substitutable)
+class WhisperASR(AudioProcessor):
+    """Can replace AudioProcessor anywhere."""
+    
+    def process(self, audio: np.ndarray) -> np.ndarray:
+        return self._transcribe(audio)
+
+# I: Interface Segregation (Many small interfaces)
+class Transcriber(Protocol):
+    """Small, focused interface."""
+    def transcribe(self, audio: np.ndarray) -> str: ...
+
+class AudioDetector(Protocol):
+    """Separate interface for VAD."""
+    def detect_speech(self, audio: np.ndarray) -> bool: ...
+
+# D: Dependency Inversion (Depend on abstractions)
+class Pipeline:
+    """Depends on interfaces, not concrete classes."""
+    
+    def __init__(
+        self,
+        asr: Transcriber,  # Interface, not WhisperASR
+        vad: AudioDetector,  # Interface, not SileroVAD
+    ):
+        self._asr = asr
+        self._vad = vad
+```
+
+### 6. Error Handling Standards
+
+#### Custom Exceptions
+```python
+# Domain exceptions
+class DomainError(Exception):
+    """Base for all domain errors."""
+
+class ValidationError(DomainError):
+    """Invalid input data."""
+
+class ConfigurationError(DomainError):
+    """Invalid configuration."""
+
+# Use specific exceptions
+def validate_config(config: dict) -> None:
+    if "api_key" not in config:
+        raise ValidationError("API key is required")
+```
+
+#### Error Handling Pattern
+```python
+def risky_operation() -> Result:
+    """
+    Returns Result type instead of raising exceptions.
+    Functional error handling.
+    """
+    try:
+        result = dangerous_call()
+        return Success(result)
+    except SpecificError as e:
+        logger.error(f"Operation failed: {e}")
+        return Failure(str(e))
+```
+
+### 7. Configuration Management (Pydantic V2)
+
+#### Model Validators (Correct Patterns)
+```python
+from pydantic import BaseModel, field_validator, model_validator
+
+class Config(BaseModel):
+    iterations: int = 16
+    codebooks: int = 32
+    
+    # Field validator - validates single field
+    @field_validator("iterations")
+    @classmethod
+    def validate_iterations(cls, v: int) -> int:
+        if v not in [16, 20, 24, 32]:
+            raise ValueError(f"Invalid: {v}")
+        return v
+    
+    # Model validator - validates whole model (use for cross-field validation)
+    @model_validator(mode='after')
+    def adjust_codebooks(self) -> 'Config':
+        """Auto-adjust codebooks to match iterations."""
+        if self.codebooks != self.iterations:
+            self.codebooks = self.iterations
+        return self
+```
+
+### 8. Type Hints - MANDATORY
+
+#### Always Use Type Hints
+```python
+from typing import List, Dict, Optional, Union, Callable, TypeVar, Generic
+
+# Good
+def process(data: List[str], limit: int = 10) -> Dict[str, int]:
+    pass
+
+# Bad (no type hints)
+def process(data, limit=10):
+    pass
+
+# Generics for reusable code
+T = TypeVar('T')
+
+class Repository(Generic[T]):
+    def get(self, id: str) -> Optional[T]:
+        pass
+```
+
+### 9. Logging Standards
+
+#### Structured Logging
+```python
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Use appropriate levels
+logger.debug("Detailed diagnostic info")
+logger.info("General informational messages")
+logger.warning("Warning about potential issues")
+logger.error("Error that prevented operation")
+logger.critical("Critical system failure")
+
+# Include context
+logger.info(
+    "Processing audio",
+    extra={
+        "duration": audio_duration,
+        "sample_rate": sample_rate,
+        "device": device,
+    }
+)
+```
+
+### 10. Documentation Standards
+
+#### Module Docstrings
+```python
+"""
+Module for audio processing utilities.
+
+This module provides functions for loading, processing, and saving
+audio files in various formats.
+
+Example:
+    >>> from ilava.utils.audio import load_audio
+    >>> audio = load_audio("file.wav")
+    >>> print(audio.shape)
+    (48000,)
+"""
+```
+
+#### Function Docstrings (Google Style)
+```python
+def synthesize(
+    text: str,
+    voice_id: str = "default",
+    sample_rate: int = 24000,
+) -> np.ndarray:
+    """
+    Synthesize speech from text using TTS model.
+    
+    This function converts input text to speech audio using the
+    configured text-to-speech model.
+    
+    Args:
+        text: The text to synthesize. Must be non-empty.
+        voice_id: Voice identifier to use. Defaults to "default".
+        sample_rate: Output sample rate in Hz. Defaults to 24000.
+    
+    Returns:
+        Audio samples as numpy array of shape (n_samples,).
+    
+    Raises:
+        ValueError: If text is empty or voice_id is invalid.
+        ModelError: If TTS model fails to generate audio.
+    
+    Examples:
+        >>> audio = synthesize("Hello world")
+        >>> print(audio.shape)
+        (48000,)
+        
+        >>> audio = synthesize("Hello", voice_id="en-US-1")
+        >>> audio.dtype
+        dtype('float32')
+    
+    Note:
+        First call may be slower due to model loading.
+    """
+```
+
+### 11. Performance Considerations
+
+#### Profile Before Optimizing
+```python
+import cProfile
+import pstats
+
+def profile_function():
+    profiler = cProfile.Profile()
+    profiler.enable()
+    
+    # Function to profile
+    expensive_operation()
+    
+    profiler.disable()
+    stats = pstats.Stats(profiler)
+    stats.sort_stats('cumulative')
+    stats.print_stats(10)
+```
+
+#### Memory Efficiency
+```python
+# Use generators for large datasets
+def process_large_file(path: str) -> Iterator[str]:
+    """Generator - doesn't load entire file."""
+    with open(path) as f:
+        for line in f:
+            yield process_line(line)
+
+# Not this:
+def process_large_file_bad(path: str) -> List[str]:
+    """Bad - loads entire file into memory."""
+    with open(path) as f:
+        return [process_line(line) for line in f]
+```
+
+### 12. Git Commit Standards
+
+#### Commit Message Format
+```
+type(scope): Short description (max 50 chars)
+
+Longer explanation if needed (wrap at 72 chars).
+Explain WHY the change was made, not just WHAT.
+
+- Bullet points for multiple changes
+- Use present tense ("Add feature" not "Added feature")
+- Reference issues: Fixes #123
+
+Types: feat, fix, docs, style, refactor, test, chore
+```
+
+#### Examples
+```
+feat(tts): Add real CSM-1B integration with fallback
+
+Integrated csm-streaming repository's CSM-1B implementation
+with graceful fallback to placeholder mode. Includes:
+- RealCSMTTS wrapper class
+- Mimi audio codec stub
+- Configuration parameter for mode switching
+
+Fixes #45
+```
+
+### 13. Code Review Checklist
+
+Before requesting review:
+- [ ] All tests pass (run `pytest`)
+- [ ] Coverage meets minimum (run `pytest --cov`)
+- [ ] Type hints added (`mypy` passes)
+- [ ] Linting passes (`flake8`, `black`)
+- [ ] Documentation updated
+- [ ] No debug code or print statements
+- [ ] Error handling implemented
+- [ ] Edge cases tested
+- [ ] Performance acceptable
+- [ ] No security vulnerabilities
+
+### 14. Refactoring Guidelines
+
+When refactoring:
+1. **Tests first**: Ensure comprehensive test coverage
+2. **Small steps**: One change at a time
+3. **Green bar**: Keep tests passing after each step
+4. **No feature changes**: Behavior stays same
+5. **Commit often**: Easy to roll back
+
+### 15. Pydantic Best Practices
+
+#### Field Validators
+```python
+from pydantic import BaseModel, field_validator, model_validator, Field
+
+class Config(BaseModel):
+    """Configuration with proper validation."""
+    
+    api_key: str = Field(description="API key from environment")
+    iterations: int = Field(default=16, ge=1, le=32)
+    
+    @field_validator("api_key", mode='before')
+    @classmethod
+    def get_api_key(cls, v: Optional[str]) -> str:
+        """Get API key from env if not provided."""
+        if not v:
+            v = os.getenv("API_KEY")
+        if not v:
+            raise ValueError("API key required")
+        return v
+    
+    @model_validator(mode='after')
+    def validate_model(self) -> 'Config':
+        """Cross-field validation after all fields set."""
+        # Use 'after' mode for cross-field validation
+        if self.iterations > 16:
+            logger.info(f"High iterations: {self.iterations}")
+        return self
+```
+
+---
+
+## Quick Reference
+
+### TDD Cycle
+1. 🔴 Write failing test
+2. 🟢 Write minimal code to pass
+3. 🔵 Refactor for quality
+4. ♻️ Repeat
+
+### SOLID Principles
+- **S**ingle Responsibility
+- **O**pen/Closed
+- **L**iskov Substitution
+- **I**nterface Segregation
+- **D**ependency Inversion
+
+### Test Types
+- **Unit**: Fast, isolated, mock dependencies
+- **Integration**: Components working together
+- **E2E**: Full system workflow
+
+### Coverage Goals
+- Minimum: 80%
+- Critical paths: 100%
+- Edge cases: All covered
+
+---
+
+## Project-Specific Rules
+
+### For i-LAVA:
+1. All audio operations must handle different sample rates
+2. All models must support CPU/CUDA/MPS
+3. All configs must validate device availability
+4. All TTS must support streaming and batch
+5. All pipelines must track metrics
+6. All errors must log with context
+
+### Performance Targets:
+- ASR: < 100ms latency
+- LLM: < 500ms response
+- TTS: < 0.3x RTF (real-time factor)
+- Pipeline: < 1s end-to-end
+
+---
+
+*These rules ensure professional, maintainable, testable code.*
+*Follow them rigorously for quality and team productivity.*
+

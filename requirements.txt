@@ -1,0 +1,67 @@
+# Core Dependencies
+torch>=2.0.0
+torchaudio>=2.0.0
+numpy>=1.24.0
+scipy>=1.10.0
+
+# ASR - Whisper
+openai-whisper>=20231117
+faster-whisper>=0.10.0
+
+# VAD - Voice Activity Detection
+silero-vad>=4.0.0
+
+# LLM - OpenAI Integration
+openai>=1.0.0
+tiktoken>=0.5.0
+
+# TTS - CSM-1B and Audio Processing
+transformers>=4.35.0
+accelerate>=0.25.0
+soundfile>=0.12.0
+librosa>=0.10.0
+audioread>=3.0.0
+
+# Performance Optimization
+# torch-compile-utils>=0.1.0  # Not available as standalone package
+# triton>=2.1.0  # Included with torch
+
+# Utilities
+pydantic>=2.0.0
+python-dotenv>=1.0.0
+tqdm>=4.65.0
+pyyaml>=6.0
+
+# Metrics and Monitoring
+tensorboard>=2.15.0
+wandb>=0.16.0
+
+# Audio Quality Metrics
+pesq>=0.0.4
+pystoi>=0.3.3
+
+# Testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.1.0
+pytest-mock>=3.12.0
+
+# Development
+black>=23.0.0
+isort>=5.12.0
+flake8>=6.0.0
+mypy>=1.7.0
+pre-commit>=3.5.0
+
+# CSM-1B Real Implementation
+einops>=0.7.0
+sounddevice>=0.4.6  # For real-time audio playback
+git+https://github.com/davidbrowne17/csm-streaming.git
+
+# Fine-Tuning (Phase 2.1.8)
+peft>=0.10.0  # LoRA implementation
+datasets>=2.18.0  # HuggingFace datasets for Elise
+optuna>=3.5.0  # Hyperparameter optimization
+
+# Semantic Turn Detection (Phase 2.2.3)
+# SmolLM2-360M-Instruct - downloads automatically via transformers
