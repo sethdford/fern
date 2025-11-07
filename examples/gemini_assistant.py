@@ -153,12 +153,13 @@ authoritative, you remain accessible. Responses are concise but informative
 
 def main():
     """Run interactive demo."""
-    # Get API key
-    api_key = os.getenv("GOOGLE_API_KEY", "AIzaSyCRdEeTViL_YzkLqTi2CeiOU7xPqjfLqOg")
+    # Get API key from environment
+    api_key = os.getenv("GOOGLE_API_KEY")
     
     if not api_key:
         print("❌ Error: GOOGLE_API_KEY not set!")
         print("Set it with: export GOOGLE_API_KEY='your-key'")
+        print("Get your key at: https://makersuite.google.com/app/apikey")
         return
     
     # Initialize assistant

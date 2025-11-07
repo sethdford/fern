@@ -14,21 +14,18 @@ FERN now supports **Google Gemini** as an alternative to OpenAI for the LLM comp
 
 ### 1. Get Your API Key
 
-You already have one! 
-```
-AIzaSyCRdEeTViL_YzkLqTi2CeiOU7xPqjfLqOg
-```
+Get your free API key at: https://makersuite.google.com/app/apikey
 
-Or get a new one at: https://makersuite.google.com/app/apikey
+It's free and takes 30 seconds!
 
 ### 2. Set Environment Variable
 
 ```bash
 # On RunPod or Linux/Mac
-export GOOGLE_API_KEY="AIzaSyCRdEeTViL_YzkLqTi2CeiOU7xPqjfLqOg"
+export GOOGLE_API_KEY="your-api-key-here"
 
 # Or add to your shell profile (~/.bashrc or ~/.zshrc)
-echo 'export GOOGLE_API_KEY="AIzaSyCRdEeTViL_YzkLqTi2CeiOU7xPqjfLqOg"' >> ~/.bashrc
+echo 'export GOOGLE_API_KEY="your-api-key-here"' >> ~/.bashrc
 source ~/.bashrc
 ```
 
@@ -96,12 +93,11 @@ llm = GeminiDialogueManager(
 ### Basic Conversation
 
 ```python
+import os
 from fern.llm.gemini_manager import GeminiDialogueManager
 
-# Initialize
-llm = GeminiDialogueManager(
-    api_key="AIzaSyCRdEeTViL_YzkLqTi2CeiOU7xPqjfLqOg"
-)
+# Initialize (uses GOOGLE_API_KEY from environment)
+llm = GeminiDialogueManager()
 
 # Chat
 response = llm.generate_response("Hello! Tell me about AI.")
@@ -115,11 +111,12 @@ print(response)
 ### Full Voice Assistant
 
 ```python
+import os
 from examples.gemini_assistant import GeminiVoiceAssistant
 
-# Create assistant
+# Create assistant (uses GOOGLE_API_KEY from environment)
 assistant = GeminiVoiceAssistant(
-    google_api_key="AIzaSyCRdEeTViL_YzkLqTi2CeiOU7xPqjfLqOg",
+    google_api_key=os.getenv("GOOGLE_API_KEY"),
     device="cuda",
     personality="friendly"  # or "professional", "casual", "expert"
 )
@@ -134,8 +131,11 @@ assistant.save_response(audio, "response.wav")
 ### Custom Personality
 
 ```python
+import os
+from fern.llm.gemini_manager import GeminiDialogueManager
+
 llm = GeminiDialogueManager(
-    api_key="AIzaSyCRdEeTViL_YzkLqTi2CeiOU7xPqjfLqOg",
+    api_key=os.getenv("GOOGLE_API_KEY"),
     system_prompt="""You are a pirate AI assistant named Captain FERN.
     You speak with a pirate accent and love maritime adventures.
     Keep responses short and entertaining."""
@@ -361,7 +361,7 @@ llm = GeminiDialogueManager(
 
 **Gemini + FERN = Fast, intelligent conversational AI!** 🚀
 
-Your API Key: `AIzaSyCRdEeTViL_YzkLqTi2CeiOU7xPqjfLqOg`
+Get your API key: https://makersuite.google.com/app/apikey
 
 Repository: https://github.com/sethdford/fern
 
