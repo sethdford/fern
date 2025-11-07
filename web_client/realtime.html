@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FERN Real-Time Voice Agent</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px;
+            max-width: 700px;
+            width: 100%;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 0.9em;
+        }
+        
+        .conversation {
+            height: 450px;
+            overflow-y: auto;
+            border: 2px solid #f0f0f0;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            background: #fafafa;
+        }
+        
+        .turn {
+            margin-bottom: 20px;
+            animation: slideIn 0.3s ease;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .user-turn {
+            text-align: right;
+        }
+        
+        .agent-turn {
+            text-align: left;
+        }
+        
+        .turn-label {
+            font-size: 0.75em;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+            opacity: 0.6;
+        }
+        
+        .turn-text {
+            display: inline-block;
+            padding: 12px 18px;
+            border-radius: 18px;
+            max-width: 80%;
+        }
+        
+        .user-turn .turn-text {
+            background: #667eea;
+            color: white;
+        }
+        
+        .agent-turn .turn-text {
+            background: #e3f2fd;
+            color: #333;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+        
+        button {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+        
+        #startBtn {
+            background: #4CAF50;
+            color: white;
+        }
+        
+        #stopBtn {
+            background: #f44336;
+            color: white;
+        }
+        
+        #clearBtn {
+            background: #9e9e9e;
+            color: white;
+        }
+        
+        .status {
+            text-align: center;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 14px;
+            min-height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        
+        .status.idle {
+            background: #e0e0e0;
+            color: #666;
+        }
+        
+        .status.listening {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .status.processing {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        
+        .status.speaking {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .pulse {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: pulse 1.5s ease infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            50% {
+                opacity: 0.5;
+                transform: scale(1.3);
+            }
+        }
+        
+        .metrics {
+            margin-top: 15px;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 8px;
+            font-size: 0.85em;
+            color: #666;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎙️ FERN Real-Time</h1>
+        <p class="subtitle">Continuous voice conversation with AI</p>
+        
+        <div class="conversation" id="conversation">
+            <div class="agent-turn">
+                <div class="turn-label">FERN</div>
+                <div class="turn-text">
+                    👋 Hello! I'm listening continuously. Just click "Start" and speak naturally!
+                </div>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <button id="startBtn" onclick="startListening()">🎤 Start Listening</button>
+            <button id="stopBtn" onclick="stopListening()" disabled>⏹️ Stop</button>
+            <button id="clearBtn" onclick="clearConversation()">🗑️ Clear</button>
+        </div>
+        
+        <div class="status idle" id="status">
+            Click "Start Listening" to begin
+        </div>
+        
+        <div class="metrics" id="metrics" style="display: none;">
+            Turns: <span id="turnCount">0</span> | 
+            Avg Latency: <span id="avgLatency">0.0</span>s
+        </div>
+    </div>
+
+    <script>
+        let websocket = null;
+        let mediaRecorder = null;
+        let audioContext = null;
+        let isListening = false;
+        let turnCount = 0;
+        let latencies = [];
+        let currentTurnStart = null;
+        
+        function updateStatus(state, message) {
+            const status = document.getElementById('status');
+            status.className = `status ${state}`;
+            
+            if (state === 'listening' || state === 'processing' || state === 'speaking') {
+                status.innerHTML = `<div class="pulse"></div>${message}`;
+            } else {
+                status.textContent = message;
+            }
+        }
+        
+        function addTurn(role, text) {
+            const conversation = document.getElementById('conversation');
+            const turnDiv = document.createElement('div');
+            turnDiv.className = `turn ${role}-turn`;
+            
+            turnDiv.innerHTML = `
+                <div class="turn-label">${role === 'user' ? 'You' : 'FERN'}</div>
+                <div class="turn-text">${text}</div>
+            `;
+            
+            conversation.appendChild(turnDiv);
+            conversation.scrollTop = conversation.scrollHeight;
+            
+            // Update metrics
+            if (role === 'agent' && currentTurnStart) {
+                const latency = (Date.now() - currentTurnStart) / 1000;
+                latencies.push(latency);
+                currentTurnStart = null;
+                
+                turnCount++;
+                updateMetrics();
+            }
+        }
+        
+        function updateMetrics() {
+            const metrics = document.getElementById('metrics');
+            metrics.style.display = 'block';
+            
+            document.getElementById('turnCount').textContent = turnCount;
+            
+            if (latencies.length > 0) {
+                const avg = latencies.reduce((a, b) => a + b, 0) / latencies.length;
+                document.getElementById('avgLatency').textContent = avg.toFixed(2);
+            }
+        }
+        
+        async function startListening() {
+            try {
+                // Request microphone access
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                
+                // Connect to WebSocket
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = `${protocol}//${window.location.host}/ws/realtime`;
+                
+                websocket = new WebSocket(wsUrl);
+                
+                websocket.onopen = () => {
+                    console.log('WebSocket connected');
+                    updateStatus('listening', '🎤 Listening continuously...');
+                    
+                    // Start recording
+                    mediaRecorder = new MediaRecorder(stream);
+                    
+                    mediaRecorder.ondataavailable = (event) => {
+                        if (event.data.size > 0 && websocket.readyState === WebSocket.OPEN) {
+                            // Send audio chunk to server
+                            event.data.arrayBuffer().then(buffer => {
+                                websocket.send(buffer);
+                            });
+                        }
+                    };
+                    
+                    // Send audio in chunks
+                    mediaRecorder.start(100); // 100ms chunks
+                    
+                    isListening = true;
+                    document.getElementById('startBtn').disabled = true;
+                    document.getElementById('stopBtn').disabled = false;
+                };
+                
+                websocket.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    
+                    switch (data.type) {
+                        case 'transcription':
+                            // User speech detected
+                            currentTurnStart = Date.now();
+                            addTurn('user', data.text);
+                            updateStatus('processing', '💭 Thinking...');
+                            break;
+                        
+                        case 'response':
+                            // Agent response text
+                            addTurn('agent', data.text);
+                            updateStatus('speaking', '🔊 Speaking...');
+                            break;
+                        
+                        case 'audio_chunk':
+                            // Play audio chunk
+                            playAudioChunk(data.data);
+                            break;
+                        
+                        case 'complete':
+                            // Response complete
+                            updateStatus('listening', '🎤 Listening continuously...');
+                            break;
+                        
+                        case 'error':
+                            updateStatus('error', `❌ Error: ${data.message}`);
+                            break;
+                    }
+                };
+                
+                websocket.onerror = (error) => {
+                    console.error('WebSocket error:', error);
+                    updateStatus('error', '❌ Connection error');
+                    stopListening();
+                };
+                
+                websocket.onclose = () => {
+                    console.log('WebSocket closed');
+                    if (isListening) {
+                        updateStatus('idle', 'Disconnected');
+                        stopListening();
+                    }
+                };
+                
+            } catch (error) {
+                console.error('Error starting:', error);
+                updateStatus('error', '❌ Microphone access denied');
+                alert('Please allow microphone access to use real-time voice.');
+            }
+        }
+        
+        function stopListening() {
+            isListening = false;
+            
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+                mediaRecorder.stream.getTracks().forEach(track => track.stop());
+            }
+            
+            if (websocket && websocket.readyState === WebSocket.OPEN) {
+                websocket.close();
+            }
+            
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+            updateStatus('idle', 'Stopped');
+        }
+        
+        function playAudioChunk(base64Data) {
+            // Decode base64 to audio
+            const audioData = atob(base64Data);
+            const arrayBuffer = new ArrayBuffer(audioData.length);
+            const view = new Uint8Array(arrayBuffer);
+            
+            for (let i = 0; i < audioData.length; i++) {
+                view[i] = audioData.charCodeAt(i);
+            }
+            
+            const blob = new Blob([arrayBuffer], { type: 'audio/wav' });
+            const url = URL.createObjectURL(blob);
+            const audio = new Audio(url);
+            
+            audio.onended = () => {
+                URL.revokeObjectURL(url);
+            };
+            
+            audio.play().catch(e => console.error('Audio play error:', e));
+        }
+        
+        function clearConversation() {
+            const conversation = document.getElementById('conversation');
+            conversation.innerHTML = `
+                <div class="agent-turn">
+                    <div class="turn-label">FERN</div>
+                    <div class="turn-text">Conversation cleared. Ready to chat!</div>
+                </div>
+            `;
+            
+            turnCount = 0;
+            latencies = [];
+            document.getElementById('metrics').style.display = 'none';
+        }
+        
+        // Handle page unload
+        window.addEventListener('beforeunload', () => {
+            stopListening();
+        });
+    </script>
+</body>
+</html>
+

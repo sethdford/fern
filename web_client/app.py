@@ -131,6 +131,12 @@ async def root():
     return FileResponse("web_client/index.html")
 
 
+@app.get("/realtime")
+async def realtime_client():
+    """Serve the real-time web client."""
+    return FileResponse("web_client/realtime.html")
+
+
 @app.get("/health")
 async def health():
     """Health check."""
@@ -372,6 +378,103 @@ async def websocket_endpoint(websocket: WebSocket):
                 
     except Exception as e:
         print(f"WebSocket error: {e}")
+        await websocket.close()
+
+
+@app.websocket("/ws/realtime")
+async def realtime_websocket(websocket: WebSocket):
+    """
+    Real-time WebSocket for continuous voice conversation.
+    
+    Client sends: Binary audio chunks
+    Server responds: Transcriptions, responses, audio chunks
+    """
+    await websocket.accept()
+    
+    # Initialize components
+    asr_instance = get_asr()
+    llm_instance = get_llm()
+    _, streaming_tts_instance = get_tts()
+    vad = VADDetector(sample_rate=16000, aggressiveness=2)
+    
+    # Audio buffer for turn detection
+    audio_buffer = []
+    is_processing = False
+    
+    try:
+        while True:
+            # Receive audio chunk
+            message = await websocket.receive()
+            
+            if "bytes" in message:
+                # Audio data received
+                audio_bytes = message["bytes"]
+                
+                # Convert to numpy
+                audio_array = np.frombuffer(audio_bytes, dtype=np.float32)
+                audio_buffer.append(audio_array)
+                
+                # Check for turn completion (if not already processing)
+                if not is_processing and len(audio_buffer) > 30:
+                    # Get recent frames
+                    recent_frames = audio_buffer[-30:]
+                    
+                    # Detect end of turn
+                    is_eot = vad.detect_end_of_turn(recent_frames, silence_duration_ms=700)
+                    
+                    if is_eot:
+                        is_processing = True
+                        
+                        # Combine audio
+                        full_audio = np.concatenate(audio_buffer)
+                        audio_buffer = []
+                        
+                        # Filter silence
+                        filtered = vad.filter_silence(full_audio, padding_ms=300)
+                        
+                        if len(filtered) > 0:
+                            # Transcribe
+                            result = asr_instance.transcribe(filtered, sample_rate=16000)
+                            text = result["text"].strip()
+                            
+                            if text:
+                                # Send transcription
+                                await websocket.send_json({
+                                    "type": "transcription",
+                                    "text": text
+                                })
+                                
+                                # Generate response
+                                response_text = llm_instance.generate_response(text)
+                                
+                                # Send response text
+                                await websocket.send_json({
+                                    "type": "response",
+                                    "text": response_text
+                                })
+                                
+                                # Stream audio
+                                for chunk in streaming_tts_instance.synthesize_stream_sentences(response_text):
+                                    buffer = io.BytesIO()
+                                    sf.write(buffer, chunk, 24000, format='WAV')
+                                    audio_b64 = base64.b64encode(buffer.getvalue()).decode()
+                                    
+                                    await websocket.send_json({
+                                        "type": "audio_chunk",
+                                        "data": audio_b64
+                                    })
+                                
+                                # Signal completion
+                                await websocket.send_json({"type": "complete"})
+                        
+                        is_processing = False
+            
+    except Exception as e:
+        print(f"Real-time WebSocket error: {e}")
+        await websocket.send_json({
+            "type": "error",
+            "message": str(e)
+        })
         await websocket.close()
 
 
