@@ -131,7 +131,21 @@ pip install --upgrade pip -q
 
 # Install PyTorch with CUDA
 print_info "Installing PyTorch with CUDA support..."
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 -q
+
+# Detect GPU and install appropriate PyTorch version
+GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader | head -1)
+
+if [[ "$GPU_NAME" == *"5090"* ]] || [[ "$GPU_NAME" == *"50"* ]]; then
+    print_info "Detected RTX 5090 - Installing PyTorch 2.8.0 with CUDA 12.6"
+    pip install torch==2.8.0 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126 -q
+elif [[ "$GPU_NAME" == *"4090"* ]] || [[ "$GPU_NAME" == *"40"* ]]; then
+    print_info "Detected RTX 4090 - Installing PyTorch with CUDA 12.1"
+    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 -q
+else
+    print_info "Installing PyTorch with CUDA 12.1 (default)"
+    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 -q
+fi
+
 print_success "PyTorch installed"
 
 # Verify CUDA in PyTorch

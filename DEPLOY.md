@@ -13,9 +13,10 @@
 1. Go to https://runpod.io/console/pods
 2. Click **"Deploy"**
 3. Select GPU:
+   - **RTX 5090** (32GB) - $0.80/hour ✅ **Best** (2x faster!)
    - **RTX 4090** (24GB) - $0.50/hour ✅ Recommended
    - **RTX 3090** (24GB) - $0.30/hour (budget)
-   - **A100** (40GB) - $2.00/hour (premium)
+   - **A100** (40GB) - $2.00/hour (enterprise)
 4. Template: **PyTorch** or **Ubuntu**
 5. Container Disk: **50GB**
 6. Click **"Deploy"**
