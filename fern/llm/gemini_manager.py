@@ -54,7 +54,13 @@ class GeminiDialogueManager:
         # Configure Gemini
         genai.configure(api_key=self.api_key)
         
-        self.model_name = model_name
+        # Map to correct model name (API compatibility)
+        model_mapping = {
+            "gemini-pro": "gemini-1.5-flash-latest",  # Use latest flash
+            "gemini-1.5-pro-latest": "gemini-1.5-pro-latest",
+            "gemini-1.5-flash": "gemini-1.5-flash-latest",
+        }
+        self.model_name = model_mapping.get(model_name, model_name)
         self.temperature = temperature
         self.max_tokens = max_tokens
         
