@@ -157,6 +157,60 @@ class VADDetector:
         
         return np.concatenate(filtered) if filtered else np.array([], dtype=audio.dtype)
     
+    def get_silence_duration(self, audio: np.ndarray) -> float:
+        """
+        Calculate duration of trailing silence in audio.
+        
+        Used by HybridTurnDetector for semantic end-of-turn detection.
+        
+        Args:
+            audio: Audio array (float32, range [-1, 1])
+        
+        Returns:
+            Duration of trailing silence in seconds
+        
+        Example:
+            >>> vad = VADDetector()
+            >>> audio = np.random.randn(16000)  # 1 second
+            >>> silence_duration = vad.get_silence_duration(audio)
+            >>> print(f"Trailing silence: {silence_duration:.2f}s")
+        """
+        if len(audio) == 0:
+            return 0.0
+        
+        # Split into frames
+        num_frames = len(audio) // self.frame_size
+        
+        if num_frames == 0:
+            return 0.0
+        
+        silence_frames = 0
+        
+        # Count trailing silence frames (work backwards)
+        for i in range(num_frames - 1, -1, -1):
+            start = i * self.frame_size
+            end = start + self.frame_size
+            
+            if end > len(audio):
+                # Incomplete frame at end
+                end = len(audio)
+            
+            frame = audio[start:end]
+            
+            # Pad if frame is incomplete
+            if len(frame) < self.frame_size:
+                frame = np.pad(frame, (0, self.frame_size - len(frame)))
+            
+            if self.is_speech(frame):
+                break  # Found speech, stop counting
+            
+            silence_frames += 1
+        
+        # Convert frames to seconds
+        duration = (silence_frames * self.frame_duration_ms) / 1000.0
+        
+        return duration
+    
     def detect_end_of_turn(
         self,
         audio_frames: List[np.ndarray],

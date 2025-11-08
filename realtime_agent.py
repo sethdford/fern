@@ -105,37 +105,103 @@ class RealtimeVoiceAgent:
         print(f"{Colors.DIM}(Press Ctrl+C to exit){Colors.END}\n")
     
     def _load_models(self, api_key: str, vad_aggressiveness: int):
-        """Load all AI models."""
+        """Load all AI models with comprehensive error handling."""
         print(f"{Colors.BLUE}⚙️  Loading AI models...{Colors.END}")
         
-        # VAD for turn detection
-        print(f"  {Colors.DIM}→ VAD (Voice Activity Detection)...{Colors.END}", end=" ")
-        self.vad = VADDetector(
-            sample_rate=self.sample_rate,
-            aggressiveness=vad_aggressiveness
-        )
-        print(f"{Colors.GREEN}✓{Colors.END}")
+        try:
+            # VAD for turn detection
+            print(f"  {Colors.DIM}[1/4] VAD (Voice Activity Detection)...{Colors.END}", end=" ", flush=True)
+            self.vad = VADDetector(
+                sample_rate=self.sample_rate,
+                aggressiveness=vad_aggressiveness
+            )
+            print(f"{Colors.GREEN}✓{Colors.END}")
+            
+            # Whisper for transcription
+            print(f"  {Colors.DIM}[2/4] Whisper ASR (large-v3-turbo)...{Colors.END}", end=" ", flush=True)
+            compute_type = "float16" if self.device == "cuda" else "int8"
+            self.asr = WhisperASR(
+                model_size="large-v3",
+                device=self.device,
+                compute_type=compute_type
+            )
+            print(f"{Colors.GREEN}✓{Colors.END}")
+            
+            # Gemini for conversation
+            print(f"  {Colors.DIM}[3/4] Gemini LLM...{Colors.END}", end=" ", flush=True)
+            self.llm = GeminiDialogueManager(api_key=api_key)
+            print(f"{Colors.GREEN}✓ ({self.llm.model_name}){Colors.END}")
+            
+            # CSM-1B for speech
+            print(f"  {Colors.DIM}[4/4] CSM-1B TTS ({self.device})...{Colors.END}", end=" ", flush=True)
+            self.tts = RealCSMTTS(device=self.device)
+            self.streaming_tts = StreamingTTS(self.tts, chunk_duration_ms=150)
+            print(f"{Colors.GREEN}✓{Colors.END}")
+            
+            print(f"\n{Colors.GREEN}✓ All models loaded successfully!{Colors.END}")
+            
+        except FileNotFoundError as e:
+            print(f"\n\n{Colors.RED}✗ Model files not found{Colors.END}")
+            print(f"{Colors.YELLOW}Issue: {e}{Colors.END}")
+            print(f"\n{Colors.BOLD}Solution:{Colors.END}")
+            print(f"  1. Download models: {Colors.CYAN}python scripts/download_models.py{Colors.END}")
+            print(f"  2. Integrate models: {Colors.CYAN}python scripts/integrate_real_models.py{Colors.END}")
+            sys.exit(1)
         
-        # Whisper for transcription
-        print(f"  {Colors.DIM}→ Whisper ASR (large-v3-turbo)...{Colors.END}", end=" ")
-        compute_type = "float16" if self.device == "cuda" else "int8"
-        self.asr = WhisperASR(
-            model_size="large-v3",
-            device=self.device,
-            compute_type=compute_type
-        )
-        print(f"{Colors.GREEN}✓{Colors.END}")
+        except RuntimeError as e:
+            error_msg = str(e)
+            if "CUDA out of memory" in error_msg:
+                print(f"\n\n{Colors.RED}✗ GPU out of memory{Colors.END}")
+                print(f"\n{Colors.BOLD}Solutions:{Colors.END}")
+                print(f"  1. Use CPU instead: {Colors.CYAN}device='cpu'{Colors.END}")
+                print(f"  2. Use smaller Whisper model: {Colors.CYAN}model_size='base'{Colors.END}")
+                print(f"  3. Close other GPU applications")
+            elif "CUDA" in error_msg or "cuDNN" in error_msg:
+                print(f"\n\n{Colors.RED}✗ CUDA error{Colors.END}")
+                print(f"{Colors.YELLOW}{error_msg}{Colors.END}")
+                print(f"\n{Colors.BOLD}Solutions:{Colors.END}")
+                print(f"  1. Check CUDA installation: {Colors.CYAN}nvidia-smi{Colors.END}")
+                print(f"  2. Try CPU mode: {Colors.CYAN}device='cpu'{Colors.END}")
+            else:
+                print(f"\n\n{Colors.RED}✗ Runtime error: {error_msg}{Colors.END}")
+            sys.exit(1)
         
-        # Gemini for conversation
-        print(f"  {Colors.DIM}→ Gemini LLM...{Colors.END}", end=" ")
-        self.llm = GeminiDialogueManager(api_key=api_key)
-        print(f"{Colors.GREEN}✓ ({self.llm.model_name}){Colors.END}")
+        except ImportError as e:
+            print(f"\n\n{Colors.RED}✗ Missing dependency{Colors.END}")
+            print(f"{Colors.YELLOW}{e}{Colors.END}")
+            print(f"\n{Colors.BOLD}Solution:{Colors.END}")
+            if "csm-streaming" in str(e) or "torchao" in str(e):
+                print(f"  Install CSM dependencies:")
+                print(f"    {Colors.CYAN}pip install torchao{Colors.END}")
+                print(f"    {Colors.CYAN}pip install git+https://github.com/davidbrowne17/csm-streaming.git{Colors.END}")
+            elif "sounddevice" in str(e):
+                print(f"  Fix audio dependencies:")
+                print(f"    {Colors.CYAN}bash scripts/fix_audio_deps.sh{Colors.END}")
+            else:
+                print(f"  Install requirements:")
+                print(f"    {Colors.CYAN}pip install -r requirements.txt{Colors.END}")
+            sys.exit(1)
         
-        # CSM-1B for speech
-        print(f"  {Colors.DIM}→ CSM-1B TTS ({self.device})...{Colors.END}", end=" ")
-        self.tts = RealCSMTTS(device=self.device)
-        self.streaming_tts = StreamingTTS(self.tts, chunk_duration_ms=150)
-        print(f"{Colors.GREEN}✓{Colors.END}")
+        except KeyError as e:
+            if "GOOGLE_API_KEY" in str(e) or "api_key" in str(e):
+                print(f"\n\n{Colors.RED}✗ Missing API key{Colors.END}")
+                print(f"\n{Colors.BOLD}Solution:{Colors.END}")
+                print(f"  Set your Gemini API key:")
+                print(f"    {Colors.CYAN}export GOOGLE_API_KEY='your-key-here'{Colors.END}")
+                print(f"\n  Get a key at: {Colors.CYAN}https://makersuite.google.com/app/apikey{Colors.END}")
+            else:
+                print(f"\n\n{Colors.RED}✗ Configuration error: {e}{Colors.END}")
+            sys.exit(1)
+        
+        except Exception as e:
+            print(f"\n\n{Colors.RED}✗ Unexpected error during model loading{Colors.END}")
+            print(f"{Colors.YELLOW}Error: {type(e).__name__}: {e}{Colors.END}")
+            print(f"\n{Colors.BOLD}Debug steps:{Colors.END}")
+            print(f"  1. Check all dependencies: {Colors.CYAN}pip list | grep -E 'torch|transformers|sounddevice'{Colors.END}")
+            print(f"  2. Verify CUDA: {Colors.CYAN}python -c 'import torch; print(torch.cuda.is_available())'{Colors.END}")
+            print(f"  3. Run diagnostics: {Colors.CYAN}python diagnose.py{Colors.END}")
+            print(f"\n{Colors.DIM}See TROUBLESHOOTING.md for more help{Colors.END}")
+            sys.exit(1)
     
     def _audio_callback(self, indata, frames, time_info, status):
         """Continuous audio capture callback."""
