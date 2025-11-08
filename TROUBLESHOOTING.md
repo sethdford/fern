@@ -1,292 +1,469 @@
 # FERN Troubleshooting Guide
 
-## Common Issues & Solutions
+## Common Issues and Solutions
 
-### 1. `ModuleNotFoundError: No module named 'sounddevice'`
+### 1. ModuleNotFoundError: No module named 'sounddevice'
 
-**Problem**: System audio libraries not installed.
+**Symptom:**
+```
+ModuleNotFoundError: No module named 'sounddevice'
+```
 
-**Solution**:
+**Root Cause:**
+`sounddevice` requires the PortAudio system library to be installed BEFORE the Python package. If you install `sounddevice` before PortAudio, it compiles without audio support.
+
+**Solution (Quick Fix):**
 ```bash
-# Quick fix (recommended)
-bash scripts/fix_audio_deps.sh
+cd /workspace/fern
+chmod +x scripts/fix_audio_deps.sh
+./scripts/fix_audio_deps.sh
+```
 
-# OR manual installation:
-# 1. Install system libraries
+**Solution (Manual):**
+```bash
+# 1. Install system dependencies
 apt-get update
-apt-get install -y portaudio19-dev libportaudio2 libsndfile1
+apt-get install -y portaudio19-dev libportaudio2 libsndfile1 libasound2-dev
 
-# 2. Reinstall Python packages
+# 2. Reinstall Python audio packages
 source venv/bin/activate
-pip install --force-reinstall sounddevice soundfile
+pip uninstall -y sounddevice soundfile
+pip install --force-reinstall --no-cache-dir sounddevice>=0.4.6 soundfile>=0.12.1
+
+# 3. Test it
+python3 -c "import sounddevice as sd; print('✓ Working!'); print(f'Devices: {len(sd.query_devices())}')"
 ```
 
-**Why?** The `sounddevice` Python package requires the PortAudio C library at the system level.
+**Prevention:**
+The updated `scripts/runpod_setup.sh` now:
+1. Installs PortAudio FIRST
+2. Installs all other dependencies
+3. Force reinstalls audio packages with `--force-reinstall --no-cache-dir`
 
 ---
 
-### 2. `OSError: PortAudio library not found`
+### 2. OSError: PortAudio library not found
 
-**Problem**: Same as above - PortAudio system library missing.
-
-**Solution**: Follow solution for error #1 above.
-
----
-
-### 3. `ModuleNotFoundError: No module named 'torchao'`
-
-**Problem**: Missing `torchao` dependency for `torchtune`.
-
-**Solution**:
-```bash
-source venv/bin/activate
-pip install torchao
+**Symptom:**
+```
+OSError: PortAudio library not found
 ```
 
-**Why?** `torchtune` (required by CSM-1B) depends on `torchao` for optimizations.
+**Root Cause:**
+Same as above - `sounddevice` was compiled without PortAudio.
+
+**Solution:**
+Same as issue #1 - run `scripts/fix_audio_deps.sh`
 
 ---
 
-### 4. `FileNotFoundError: No model files found in models/csm-1b`
+### 3. FileNotFoundError: No model files found in models/csm-1b
 
-**Problem**: CSM-1B and Mimi model weights not downloaded.
+**Symptom:**
+```
+FileNotFoundError: No model files found in models/csm-1b
+```
 
-**Solution**:
+**Root Cause:**
+CSM-1B and Mimi models haven't been downloaded yet.
+
+**Solution:**
 ```bash
-# Download models (2.9 GB)
+cd /workspace/fern
+source venv/bin/activate
+
+# Download models (2.9 GB, takes 5-10 minutes)
 python scripts/download_models.py
 
-# Integrate into FERN
+# Integrate them
 python scripts/integrate_real_models.py
 
 # Test
 python scripts/test_real_models.py
 ```
 
-**Why?** FERN requires real model weights from HuggingFace.
-
 ---
 
-### 5. `404 models/gemini-pro is not found`
+### 4. torch.AcceleratorError: CUDA error: no kernel image is available
 
-**Problem**: Gemini model name has changed or is unavailable.
+**Symptom:**
+```
+torch.AcceleratorError: CUDA error: no kernel image is available for execution on the device
+```
 
-**Solution**: Already auto-fixed! The code now auto-detects available models.
+**Root Cause:**
+PyTorch version doesn't support your GPU architecture (e.g., RTX 5090 needs PyTorch 2.5.1+).
 
-If still failing:
+**Solution:**
+For RTX 5090:
 ```bash
-# Check available models
-python -c "
-import google.generativeai as genai
-genai.configure(api_key='your-key')
-for model in genai.list_models():
-    if 'generateContent' in model.supported_generation_methods:
-        print(model.name)
-"
+pip uninstall torch torchvision torchaudio
+pip install torch==2.5.1 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
 ```
 
----
-
-### 6. PyTorch CUDA Capability Mismatch
-
-**Problem**:
-```
-WARNING: NVIDIA GeForce RTX 5090 with CUDA capability sm_120 is not compatible
-```
-
-**Solution**: Install correct PyTorch version for your GPU.
-
+For RTX 4090:
 ```bash
-# For RTX 5090 (CUDA 12.6)
-pip install torch==2.8.0 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
-
-# For RTX 4090 (CUDA 12.1)
+pip uninstall torch torchvision torchaudio
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-
-# For older GPUs (CUDA 11.8)
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
 ```
 
-**Why?** Different GPU architectures require different CUDA versions.
-
----
-
-### 7. `RuntimeError: Index put requires the source and destination dtypes match`
-
-**Problem**: Dtype mismatch when loading CSM-1B model.
-
-**Solution**: Already fixed! The code now auto-converts dtypes.
-
-If still failing:
+**Verify:**
 ```bash
-# Force CPU fallback
-python realtime_agent.py  # Will auto-detect and use CPU if needed
+python3 -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'CUDA: {torch.cuda.is_available()}'); print(f'GPU: {torch.cuda.get_device_name(0)}')"
 ```
 
 ---
 
-### 8. No audio output / Can't hear TTS
+### 5. Error generating response: 404 models/gemini-pro is not found
 
-**Problem**: Audio device configuration.
+**Symptom:**
+```
+Error generating response: 404 models/gemini-pro is not found
+```
 
-**Solution**:
+**Root Cause:**
+Google Gemini model names change over time. The code now dynamically detects available models.
+
+**Solution:**
+Ensure you have the latest code:
 ```bash
-# List available audio devices
-python -c "import sounddevice; print(sounddevice.query_devices())"
+cd /workspace/fern
+git pull
+```
 
-# Set default output device (replace X with device ID)
-export SD_DEVICE=X
+The `fern/llm/gemini_manager.py` now auto-detects available models and tries:
+1. `gemini-1.5-flash-latest`
+2. `gemini-1.5-pro-latest`
+3. `gemini-pro`
 
-# Test audio
-python -c "
+**Verify:**
+```bash
+export GOOGLE_API_KEY="your-key"
+python3 -c "from fern.llm.gemini_manager import GeminiDialogueManager; gm = GeminiDialogueManager(); print(gm.generate_response('Hello'))"
+```
+
+---
+
+### 6. ModuleNotFoundError: No module named 'torchao'
+
+**Symptom:**
+```
+ModuleNotFoundError: No module named 'torchao'
+```
+
+**Root Cause:**
+`torchtune` requires `torchao`, but it's not always installed automatically.
+
+**Solution:**
+```bash
+pip install torchao
+```
+
+---
+
+### 7. Git push failed / Permission denied
+
+**Symptom:**
+```
+git push
+Permission denied (publickey).
+```
+
+**Root Cause:**
+SSH keys not configured for GitHub.
+
+**Solution:**
+```bash
+# Option 1: Use HTTPS instead
+git remote set-url origin https://github.com/sethdford/fern.git
+git push
+
+# Option 2: Add SSH key to GitHub
+ssh-keygen -t ed25519 -C "your_email@example.com"
+cat ~/.ssh/id_ed25519.pub
+# Add this to GitHub Settings > SSH Keys
+```
+
+---
+
+### 8. No audio output when running real-time agents
+
+**Symptom:**
+Running `realtime_agent.py` but hearing no audio.
+
+**Root Cause:**
+Multiple possibilities:
+- Audio device not configured
+- Volume muted
+- Wrong audio device selected
+
+**Solution:**
+```bash
+# List audio devices
+python3 -c "import sounddevice as sd; print(sd.query_devices())"
+
+# Test audio output
+python3 << EOF
 import sounddevice as sd
 import numpy as np
-# Play 440Hz tone for 1 second
-fs = 44100
-t = np.linspace(0, 1, fs)
-audio = np.sin(2 * np.pi * 440 * t)
+
+# Generate 440Hz tone (A4)
+fs = 24000
+duration = 1.0
+t = np.linspace(0, duration, int(fs * duration))
+audio = np.sin(2 * np.pi * 440 * t) * 0.3
+
+print("Playing test tone...")
 sd.play(audio, fs)
 sd.wait()
-print('✓ Audio test complete')
-"
+print("Did you hear a beep?")
+EOF
+```
+
+**Configure specific device:**
+Edit the agent script and set:
+```python
+sd.default.device = 1  # Change to your device ID
 ```
 
 ---
 
-### 9. `git clone` fails / Can't push to GitHub
+### 9. Import errors after git pull
 
-**Problem**: Git authentication.
-
-**Solution**:
-```bash
-# Option 1: Use HTTPS with Personal Access Token
-git clone https://github.com/sethdford/fern.git
-# Username: your-github-username
-# Password: your-personal-access-token
-
-# Option 2: Use SSH
-git clone git@github.com:sethdford/fern.git
-# Requires SSH key setup: https://docs.github.com/en/authentication/connecting-to-github-with-ssh
+**Symptom:**
+```
+ImportError: cannot import name 'X' from 'fern.Y'
 ```
 
----
+**Root Cause:**
+New dependencies added or package structure changed.
 
-### 10. RunPod setup script hangs or fails
-
-**Problem**: Network issues, package conflicts, or missing dependencies.
-
-**Solution**:
+**Solution:**
 ```bash
-# Run setup in verbose mode
-bash -x scripts/runpod_setup.sh 2>&1 | tee setup.log
-
-# If specific step fails, run manually:
 cd /workspace/fern
 source venv/bin/activate
 
-# Install in order:
-pip install torch==2.8.0 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
-pip install -r requirements.txt
-pip install git+https://github.com/davidbrowne17/csm-streaming.git
-python scripts/download_models.py
-python scripts/integrate_real_models.py
+# Reinstall all dependencies
+pip install --upgrade -r requirements.txt
+
+# If that doesn't work, recreate venv
+deactivate
+rm -rf venv
+python3 -m venv venv
+source venv/bin/activate
+./scripts/runpod_setup.sh  # Will skip already-installed system packages
 ```
 
 ---
 
-## Environment Setup Checklist
+### 10. Out of memory errors
 
-Before running FERN, ensure:
+**Symptom:**
+```
+torch.cuda.OutOfMemoryError: CUDA out of memory
+```
 
-- ✅ **System**: Linux/Ubuntu (RunPod recommended)
-- ✅ **GPU**: NVIDIA with CUDA (RTX 4090/5090 recommended)
-- ✅ **Python**: 3.10+ with virtual environment
-- ✅ **System Audio**: PortAudio installed (`apt-get install portaudio19-dev`)
-- ✅ **PyTorch**: Correct CUDA version for your GPU
-- ✅ **API Key**: `GOOGLE_API_KEY` environment variable set
-- ✅ **Models**: CSM-1B and Mimi weights downloaded (`models/` directory)
-- ✅ **Packages**: All `requirements.txt` installed + `csm-streaming`
+**Root Cause:**
+Model too large for your GPU.
+
+**Solution:**
+
+**Check GPU memory:**
+```bash
+nvidia-smi
+```
+
+**Reduce batch size:**
+```python
+# In training scripts
+config.batch_size = 1  # Reduce from 4 to 1
+```
+
+**Use CPU for TTS (slower but works):**
+```python
+tts = RealCSMTTS(device="cpu")
+```
+
+**Clear CUDA cache:**
+```python
+import torch
+torch.cuda.empty_cache()
+```
+
+---
+
+## Prevention: Best Practices
+
+### 1. Always Pull Latest Code
+```bash
+cd /workspace/fern
+git pull
+```
+
+### 2. Use Virtual Environments
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+### 3. Install Dependencies in Order
+```bash
+# 1. System packages first
+apt-get update
+apt-get install -y portaudio19-dev libportaudio2 libsndfile1
+
+# 2. PyTorch second
+pip install torch torchvision torchaudio --index-url https://...
+
+# 3. Other packages third
+pip install -r requirements.txt
+
+# 4. CSM-streaming last
+pip install git+https://github.com/davidbrowne17/csm-streaming.git
+```
+
+### 4. Set Environment Variables
+```bash
+# Create .env file
+cat > .env << EOF
+GOOGLE_API_KEY=your-key-here
+OPENAI_API_KEY=your-key-here
+HF_TOKEN=your-token-here
+EOF
+
+# Load in scripts
+python3 << EOF
+from dotenv import load_dotenv
+load_dotenv()
+EOF
+```
+
+### 5. Test After Installation
+```bash
+# Quick test
+python scripts/test_real_models.py
+
+# Voice client test
+python test_gemini.py
+
+# Full pipeline test
+python realtime_agent.py
+```
 
 ---
 
 ## Getting Help
 
-### Check Logs
+### 1. Check Logs
 ```bash
-# Run with debug logging
-export LOG_LEVEL=DEBUG
-python realtime_agent.py 2>&1 | tee fern.log
+# Python errors
+python script.py 2>&1 | tee error.log
+
+# System logs
+dmesg | tail -50
+
+# CUDA logs
+nvidia-smi dmon -s u -d 1
 ```
 
-### Test Components Individually
+### 2. Verify Environment
 ```bash
-# Test Gemini
-python test_gemini.py
+# Python version
+python3 --version
+
+# PyTorch version
+python3 -c "import torch; print(torch.__version__)"
+
+# CUDA version
+nvidia-smi
+
+# Installed packages
+pip list | grep -E "torch|sounddevice|transformers|pydantic"
+```
+
+### 3. Run Diagnostics
+```bash
+# Create diagnostic script
+cat > diagnose.py << 'EOF'
+import sys
+import torch
+import sounddevice as sd
+import os
+
+print("=== FERN Diagnostic Report ===\n")
+
+print(f"Python: {sys.version}")
+print(f"PyTorch: {torch.__version__}")
+print(f"CUDA Available: {torch.cuda.is_available()}")
+
+if torch.cuda.is_available():
+    print(f"GPU: {torch.cuda.get_device_name(0)}")
+    print(f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
+
+print(f"\nAudio Devices: {len(sd.query_devices())}")
+print(sd.query_devices())
+
+print(f"\nEnvironment Variables:")
+print(f"  GOOGLE_API_KEY: {'✓ Set' if os.getenv('GOOGLE_API_KEY') else '✗ Missing'}")
+print(f"  OPENAI_API_KEY: {'✓ Set' if os.getenv('OPENAI_API_KEY') else '✗ Missing'}")
+
+print("\nTrying imports...")
+try:
+    from fern.tts.csm_real import RealCSMTTS
+    print("  ✓ RealCSMTTS")
+except Exception as e:
+    print(f"  ✗ RealCSMTTS: {e}")
+
+try:
+    from fern.llm.gemini_manager import GeminiDialogueManager
+    print("  ✓ GeminiDialogueManager")
+except Exception as e:
+    print(f"  ✗ GeminiDialogueManager: {e}")
+
+try:
+    from fern.asr.whisper_asr import WhisperASR
+    print("  ✓ WhisperASR")
+except Exception as e:
+    print(f"  ✗ WhisperASR: {e}")
+
+print("\n=== End Report ===")
+EOF
+
+python diagnose.py
+```
+
+---
+
+## Quick Command Reference
+
+```bash
+# Fix audio
+./scripts/fix_audio_deps.sh
+
+# Reinstall everything
+rm -rf venv && python3 -m venv venv && source venv/bin/activate && ./scripts/runpod_setup.sh
+
+# Update code
+git pull && pip install --upgrade -r requirements.txt
 
 # Test models
 python scripts/test_real_models.py
 
-# Test audio
-python -c "import sounddevice; print(sounddevice.query_devices())"
+# Run agent
+python realtime_agent_advanced.py
 
-# Test VAD
-python -c "from fern.asr.vad_detector import VADDetector; vad = VADDetector(); print('✓ VAD OK')"
+# Start web server
+uvicorn web_client.app:app --host 0.0.0.0 --port 8000
 
-# Test ASR
-python -c "from fern.asr.whisper_asr import WhisperASR; asr = WhisperASR(); print('✓ ASR OK')"
-```
-
-### Quick Fixes Script
-```bash
-# Runs all common fixes
-bash scripts/fix_audio_deps.sh
+# Monitor GPU
+watch -n 1 nvidia-smi
 ```
 
 ---
 
-## Best Practices
+**Last Updated:** 2025-11-08
 
-1. **Always use virtual environment**:
-   ```bash
-   source /workspace/fern/venv/bin/activate
-   ```
-
-2. **Update dependencies regularly**:
-   ```bash
-   git pull
-   pip install -r requirements.txt --upgrade
-   ```
-
-3. **Use tmux for long-running tasks**:
-   ```bash
-   tmux new -s fern
-   python realtime_agent_advanced.py
-   # Detach: Ctrl+B then D
-   # Reattach: tmux attach -t fern
-   ```
-
-4. **Monitor GPU usage**:
-   ```bash
-   watch -n 1 nvidia-smi
-   ```
-
-5. **Check disk space** (models are 2.9 GB):
-   ```bash
-   df -h /workspace
-   du -sh models/
-   ```
-
----
-
-## Still Having Issues?
-
-1. **Check the logs** in the terminal output
-2. **Run the test suite**: `pytest tests/`
-3. **Verify system requirements** in this guide
-4. **Check GitHub Issues**: https://github.com/sethdford/fern/issues
-5. **Run quick fixes**: `bash scripts/fix_audio_deps.sh`
-
----
-
-*This troubleshooting guide covers the most common issues. For FERN-specific problems, see `REALTIME_AGENT_GUIDE.md`.*
-
+For more help, see:
+- Main README: `README.md`
+- Real-time Agent Guide: `REALTIME_AGENT_GUIDE.md`
+- Deployment Guide: `DEPLOY.md`

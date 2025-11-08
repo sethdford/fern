@@ -61,8 +61,8 @@ print_success "System updated"
 
 # Install audio system dependencies
 print_header "Installing Audio System Dependencies"
-print_info "Installing PortAudio for voice clients..."
-apt-get install -y portaudio19-dev libportaudio2 libsndfile1
+print_info "Installing PortAudio and audio libraries for voice clients..."
+apt-get install -y portaudio19-dev libportaudio2 libsndfile1 libasound2-dev
 print_success "Audio system dependencies installed"
 
 # Set up workspace
@@ -161,12 +161,17 @@ python3 -c "import torch; assert torch.cuda.is_available(), 'CUDA not available 
 print_info "Installing FERN dependencies..."
 if [ -f "requirements.txt" ]; then
     # Install all requirements (csm-streaming is commented out in the file)
-    pip install -r requirements.txt -q
+    pip install -r requirements.txt
     print_success "Core dependencies installed"
+    
+    # Force reinstall audio packages after PortAudio is installed
+    print_info "Reinstalling audio packages with PortAudio support..."
+    pip install --force-reinstall --no-cache-dir sounddevice>=0.4.6 soundfile>=0.12.1
+    print_success "Audio packages reinstalled"
     
     # Now install csm-streaming separately (PyTorch is available now)
     print_info "Installing CSM-streaming (requires PyTorch to build)..."
-    pip install git+https://github.com/davidbrowne17/csm-streaming.git -q
+    pip install git+https://github.com/davidbrowne17/csm-streaming.git
     print_success "CSM-streaming installed"
 else
     print_error "requirements.txt not found"
