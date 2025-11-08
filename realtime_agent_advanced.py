@@ -33,7 +33,7 @@ from fern.tts.csm_real import RealCSMTTS
 from fern.tts.csm_streaming import StreamingTTS
 from fern.asr.whisper_asr import WhisperASR
 from fern.asr.vad_detector import VADDetector
-from fern.turn_detection.semantic_detector import SemanticTurnDetector, HybridTurnDetector
+from fern.vad.semantic_turn_detector import SemanticTurnDetector, HybridTurnDetector
 
 
 class Colors:
