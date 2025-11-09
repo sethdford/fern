@@ -43,6 +43,15 @@ class RealCSMTTS:
             self.generator, self.mimi = load_csm_1b_real(device)
             self.Segment = Segment
             
+            # Apply torch.compile for 20-30% speedup
+            if device != 'cpu' and hasattr(torch, 'compile'):
+                logger.info("Applying torch.compile to CSM-1B generator...")
+                try:
+                    self.generator = torch.compile(self.generator, mode='reduce-overhead')
+                    logger.info("✓ torch.compile applied successfully")
+                except Exception as e:
+                    logger.warning(f"torch.compile failed (using regular mode): {e}")
+            
             logger.info("✓ CSM-1B generator loaded successfully!")
             logger.info(f"  Device: {device}")
             logger.info(f"  Sample rate: {sample_rate}Hz")

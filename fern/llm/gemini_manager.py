@@ -155,8 +155,12 @@ Remember: Your responses will be spoken aloud, so keep them natural and conversa
             else:
                 prompt = f"{self.system_prompt}\n\nUser: {user_message}\n\nAssistant:"
             
-            # Generate response
-            response = self.model.generate_content(prompt)
+            # Generate response with configuration
+            generation_config = genai.types.GenerationConfig(
+                temperature=self.temperature,
+                max_output_tokens=self.max_tokens,  # Optimize for low latency
+            )
+            response = self.model.generate_content(prompt, generation_config=generation_config)
             response_text = response.text.strip()
             
             # Add to history
